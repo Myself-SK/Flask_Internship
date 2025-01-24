@@ -1,6 +1,9 @@
 from flask import Flask,request,jsonify
 import pandas as pd
 import pymysql
+from concurrent.futures import ThreadPoolExecutor,as_completed
+import time
+
 conn = pymysql.connect(
     host="127.0.0.1",
     user="root",
@@ -10,13 +13,16 @@ conn = pymysql.connect(
 cur = conn.cursor()
 app = Flask(__name__)
 
+
+
 def addEmployee(data):
     try:
         q = f"insert into employee(empId,name,designation,email) values('{data['empId']}','{data['name']}','{data['designation']}','{data['email']}')"
         cur.execute(q)
         conn.commit()
         return True
-    except:
+    except Exception as e:
+        print(e)
         return False
 
 def updateEmployee(data):
@@ -70,7 +76,22 @@ def driverCode(data):
                 return False
     except:
         pass
- 
+
+def driver_batches(batch):
+    print(f'Process Initiated')
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(driverCode, item) for item in batch]
+        results = []
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception as e:
+                print(e)
+                print(f"Error processing item: {e}")
+    print(f'Process Completed')
+
+
+
 @app.route("/",methods=["GET","POST"])
 def index():
     if request.method == "POST":
@@ -79,14 +100,19 @@ def index():
         f.save(f.filename)
         print(f.filename)
         data = pd.read_excel(f.filename)
-        print(data.head())
+        print(data.head()) 
+
         d = data.to_dict("records")
         updatedCount = 0
         addedCount = 0
         failedCount = 0
         errItems = []
-        for i in d:
-            driverCode(i)
+        a = time.time()
+        driver_batches(d)
+        # for i in d:
+        #     driverCode(i)
+        b = time.time()
+        print(b-a)
         return jsonify({
             "message":"Data Added Successfully",
             # "Total Added Count":addedCount,
